@@ -1,57 +1,73 @@
-from datetime import date
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import DailySchedule
-from app.schemas import GenerateScheduleRequest, MarkScheduleRequest
-from app.services.schedule_service import generate_schedule_service
+from app.dependencies import get_current_student
+from app.services.schedule_service import (
+    get_schedule_dashboard,
+    generate_smart_schedule,
+    toggle_schedule_task,
+    mark_task_missed,
+)
 
-router = APIRouter(prefix="/schedule", tags=["Schedule"])
-
-
-@router.post("/generate")
-def generate_schedule(request: GenerateScheduleRequest, db: Session = Depends(get_db)):
-    return generate_schedule_service(
-        db=db,
-        student_id=request.student_id,
-        subject_id=request.subject_id,
-        start_date=request.start_date,
-        days=request.days,
-        daily_minutes=request.daily_minutes,
-    )
+router = APIRouter(
+    prefix="/schedule",
+    tags=["Schedule"]
+)
 
 
-@router.get("/today/{student_id}")
-def get_today_schedule(student_id: int, db: Session = Depends(get_db)):
-    today = date.today()
-    return (
-        db.query(DailySchedule)
-        .filter(DailySchedule.student_id == student_id, DailySchedule.schedule_date == today)
-        .order_by(DailySchedule.id)
-        .all()
-    )
+@router.get("/dashboard")
+def schedule_dashboard(
+    db: Session = Depends(get_db),
+    current_student=Depends(get_current_student),
+):
+    try:
+        return get_schedule_dashboard(db, current_student)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/week/{student_id}")
-def get_week_schedule(student_id: int, db: Session = Depends(get_db)):
-    today = date.today()
-    return (
-        db.query(DailySchedule)
-        .filter(DailySchedule.student_id == student_id, DailySchedule.schedule_date >= today)
-        .order_by(DailySchedule.schedule_date, DailySchedule.id)
-        .all()
-    )
+@router.post("/generate-smart")
+def generate_schedule(
+    db: Session = Depends(get_db),
+    current_student=Depends(get_current_student),
+):
+    try:
+        result = generate_smart_schedule(db, current_student, days=7)
+        dashboard = get_schedule_dashboard(db, current_student)
+
+        return {
+            "message": result["message"],
+            "created_tasks": result["created_tasks"],
+            "dashboard": dashboard,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.patch("/{schedule_id}/status")
-def mark_schedule_status(schedule_id: int, request: MarkScheduleRequest, db: Session = Depends(get_db)):
-    item = db.query(DailySchedule).filter(DailySchedule.id == schedule_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Schedule item not found")
+@router.patch("/task/{task_id}/toggle")
+def toggle_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_student=Depends(get_current_student),
+):
+    try:
+        return toggle_schedule_task(db, current_student, task_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    item.status = request.status
-    db.commit()
-    db.refresh(item)
-    return item
+
+@router.patch("/task/{task_id}/missed")
+def missed_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_student=Depends(get_current_student),
+):
+    try:
+        return mark_task_missed(db, current_student, task_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

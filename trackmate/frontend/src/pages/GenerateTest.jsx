@@ -23,7 +23,7 @@ function GenerateTest() {
   const fetchChapters = async () => {
     try {
       const response = await API.get(`/chapters/subject/${subjectId}`);
-      setChapters(response.data);
+      setChapters(response.data || []);
     } catch (err) {
       console.error("Chapter fetch failed:", err);
       setError("Failed to load chapters.");
@@ -31,12 +31,14 @@ function GenerateTest() {
   };
 
   const toggleChapter = (chapterId) => {
+    const id = Number(chapterId);
+
     setSelectedChapters((prev) => {
-      if (prev.includes(chapterId)) {
-        return prev.filter((id) => id !== chapterId);
+      if (prev.includes(id)) {
+        return prev.filter((chapterId) => chapterId !== id);
       }
 
-      return [...prev, chapterId];
+      return [...prev, id];
     });
   };
 
@@ -48,7 +50,9 @@ function GenerateTest() {
       return;
     }
 
-    if (!questionCount || Number(questionCount) <= 0) {
+    const totalQuestions = Number(questionCount);
+
+    if (!totalQuestions || totalQuestions <= 0) {
       setError("Please enter valid question count.");
       return;
     }
@@ -56,19 +60,34 @@ function GenerateTest() {
     try {
       setLoading(true);
 
+      const sortedChapterIds = [...selectedChapters].sort((a, b) => a - b);
+
       const payload = {
         student_id: studentId,
         subject_id: subjectId,
-        chapter_ids: selectedChapters,
-        question_count: Number(questionCount),
+        chapter_ids: sortedChapterIds,
+        question_count: totalQuestions,
         difficulty: difficulty,
       };
 
+      console.log("Generate test payload:", payload);
+
       const response = await API.post("/tests/generate", payload);
+      const generatedTest = response.data;
+
+      console.log("Generated test response:", generatedTest);
+
+      // Important: remove old/stale test data first
+      localStorage.removeItem("trackmate_test");
+      localStorage.removeItem("trackmate_result");
+      localStorage.removeItem("trackmate_answers");
+
+      // Save the latest generated test
+      localStorage.setItem("trackmate_test", JSON.stringify(generatedTest));
 
       navigate("/test", {
         state: {
-          test: response.data,
+          test: generatedTest,
         },
       });
     } catch (err) {
@@ -92,7 +111,7 @@ function GenerateTest() {
           <h1>Generate Chapter Test</h1>
           <p className="subtitle">
             Select difficulty, chapters, and number of questions. TrackMate will
-            generate a smart chapter-wise test.
+            generate questions only from selected chapters and selected difficulty.
           </p>
         </div>
 
@@ -151,14 +170,15 @@ function GenerateTest() {
 
         <div className="chapter-grid">
           {chapters.map((chapter) => {
-            const isSelected = selectedChapters.includes(chapter.id);
+            const chapterId = Number(chapter.id);
+            const isSelected = selectedChapters.includes(chapterId);
 
             return (
               <button
                 type="button"
                 key={chapter.id}
                 className={isSelected ? "chapter-card selected" : "chapter-card"}
-                onClick={() => toggleChapter(chapter.id)}
+                onClick={() => toggleChapter(chapterId)}
               >
                 <div className="chapter-top">
                   <span className="chapter-number">

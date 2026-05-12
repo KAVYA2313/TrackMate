@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
 from app.models import Chapter, RetentionState, Subject
+from app.services.notification_service import create_or_update_weak_chapter_notification
 
 
 WEAK_RETENTION_LIMIT = 40.0
@@ -457,6 +458,10 @@ def update_retention_after_chapter_test(
     existing_state.weak_chapter = weak_chapter
     existing_state.priority_score = priority_score
     existing_state.last_activity_at = now
+    existing_state.last_decay_at = now
+
+    if weak_chapter:
+        create_or_update_weak_chapter_notification(db, existing_state)
 
     return {
         "student_id": student_id,
@@ -480,13 +485,15 @@ def update_retention_after_chapter_test(
         "logic_used": "first_test_score_based" if is_first_test else "decay_plus_latest_score",
     }
 
-
 def refresh_retention_for_student(db: Session, student_id: int) -> Dict[str, Any]:
     """
-    Call this when student opens dashboard.
+    This function runs when:
+    1. Student opens dashboard
+    2. Daily scheduler runs
 
-    It applies forgetting decay even if student did not submit new test.
-    Useful for missed days.
+    It applies daily forgetting decay.
+    It does NOT update last_activity_at because opening dashboard is not studying.
+    It updates last_decay_at to avoid double decay.
     """
     records = (
         db.query(RetentionState)
@@ -498,7 +505,22 @@ def refresh_retention_for_student(db: Session, student_id: int) -> Dict[str, Any
     refreshed = []
 
     for record in records:
-        days_passed = get_days_passed(record.last_activity_at)
+        decay_base_time = record.last_decay_at or record.last_activity_at
+        days_passed = get_days_passed(decay_base_time)
+
+        if days_passed <= 0:
+            refreshed.append(
+                {
+                    "chapter_id": record.chapter_id,
+                    "chapter_name": record.chapter_name,
+                    "retention": record.retention,
+                    "weak_chapter": record.weak_chapter,
+                    "priority_score": record.priority_score,
+                    "days_passed": days_passed,
+                    "message": "No decay needed yet",
+                }
+            )
+            continue
 
         decayed_retention = calculate_decayed_retention(
             old_retention=safe_float(record.retention),
@@ -526,8 +548,11 @@ def refresh_retention_for_student(db: Session, student_id: int) -> Dict[str, Any
         record.weak_chapter = weak_chapter
         record.priority_score = priority_score
 
-        # Important: update checkpoint time so decay is not applied twice.
-        record.last_activity_at = now
+        # This is only decay checkpoint, not student learning activity.
+        record.last_decay_at = now
+
+        if weak_chapter:
+            create_or_update_weak_chapter_notification(db, record)
 
         refreshed.append(
             {

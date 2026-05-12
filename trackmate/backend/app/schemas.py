@@ -1,7 +1,47 @@
 from datetime import date
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
+
+
+class SignupRequest(BaseModel):
+    name: str = Field(min_length=2)
+    email: EmailStr
+    password: str = Field(min_length=6)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(min_length=6, max_length=6)
+
+
+class SetupProfileRequest(BaseModel):
+    study_hours_per_day: float = Field(gt=0, le=16)
+    exam_days_left: int = Field(gt=0, le=365)
+
+
+class StudentResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    study_hours_per_day: Optional[float]
+    exam_days_left: Optional[int]
+    profile_completed: bool
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    profile_completed: bool
+    student: StudentResponse
 
 
 class SubjectCreate(BaseModel):
@@ -27,11 +67,12 @@ class CreateQuestionRequest(BaseModel):
 
 
 class GenerateTestRequest(BaseModel):
-    student_id: int
+    student_id: Optional[int] = None
     subject_id: int
     chapter_ids: List[int]
     question_count: int
     difficulty: str = "Easy"
+
 
 class AnswerItem(BaseModel):
     question_id: int
@@ -43,7 +84,7 @@ class SubmitTestRequest(BaseModel):
 
 
 class GenerateScheduleRequest(BaseModel):
-    student_id: int = 1
+    student_id: Optional[int] = None
     subject_id: int = 1
     start_date: Optional[date] = None
     days: int = Field(default=7, ge=1, le=14)
