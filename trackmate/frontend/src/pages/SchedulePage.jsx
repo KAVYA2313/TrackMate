@@ -138,7 +138,7 @@ export default function SchedulePage() {
 
           <p className="schedule-subtitle">
             AI creates your study and revision plan using topics, retention,
-            priority score, missed tasks, and weak chapters.
+            priority score, missed tasks, weak chapters, and exam countdown.
           </p>
         </div>
 
@@ -166,36 +166,36 @@ export default function SchedulePage() {
       )}
 
       <div className="schedule-stat-grid">
-  <StatCard
-    label="Overall Retention"
-    value={`${stats.overall_retention || 0}%`}
-    note="Average memory level"
-  />
+        <StatCard
+          label="Overall Retention"
+          value={`${stats.overall_retention || 0}%`}
+          note="Average memory level"
+        />
 
-  <StatCard
-    label="Weak Topics"
-    value={stats.weak_topics || 0}
-    note="Need revision first"
-  />
+        <StatCard
+          label="Weak Topics"
+          value={stats.weak_topics || 0}
+          note="Need revision first"
+        />
 
-  <StatCard
-    label="Upcoming Reviews"
-    value={stats.upcoming_reviews || 0}
-    note="Due today/tomorrow"
-  />
+        <StatCard
+          label="Upcoming Reviews"
+          value={stats.upcoming_reviews || 0}
+          note="Due today/tomorrow"
+        />
 
-  <StatCard
-    label="Today Study Time"
-    value={`${budget.total_minutes || 0} min`}
-    note={`Study ${budget.study_minutes || 0} min • Revision ${budget.revision_minutes || 0} min`}
-  />
+        <StatCard
+          label="Today Study Time"
+          value={`${budget.total_minutes || 0} min`}
+          note={`Study ${budget.study_minutes || 0} min • Revision ${budget.revision_minutes || 0} min`}
+        />
 
-  <StatCard
-    label="Exam Days Left"
-    value={`${examCountdown.exam_day_left ?? 0} days`}
-    note="Countdown updates daily"
-  />
-</div>
+        <StatCard
+          label="Exam Days Left"
+          value={`${examCountdown.exam_day_left ?? 0} days`}
+          note="Countdown updates daily"
+        />
+      </div>
 
       <div className="schedule-main-grid">
         <div className="schedule-left">
@@ -263,10 +263,10 @@ export default function SchedulePage() {
             <ul>
               <li>OpenAI receives topics, retention, priority score and missed tasks.</li>
               <li>Wrong answers are analyzed to detect exact weak topics.</li>
-              <li>High priority chapters are added into revision section.</li>
-              <li>New topics follow chapter and topic order.</li>
+              <li>Study time uses student study_hours_per_day from database.</li>
+              <li>If revision is needed, schedule follows 70% study and 30% revision.</li>
+              <li>AI Revision Plan button appears only for revision tasks.</li>
               <li>Today tasks can be ticked and submitted.</li>
-              <li>AI Revision Plan explains what exactly to revise.</li>
             </ul>
           </div>
         </div>
@@ -321,6 +321,7 @@ function DayColumn({ day, onToggle, onMissed }) {
 
       <TaskSection
         title="Study Section"
+        sectionType="STUDY"
         emptyText="No new study tasks."
         tasks={day.study_tasks || []}
         dayDate={day.date}
@@ -331,6 +332,7 @@ function DayColumn({ day, onToggle, onMissed }) {
 
       <TaskSection
         title="Revision Section"
+        sectionType="REVISION"
         emptyText="No revision tasks."
         tasks={day.revision_tasks || []}
         dayDate={day.date}
@@ -344,6 +346,7 @@ function DayColumn({ day, onToggle, onMissed }) {
 
 function TaskSection({
   title,
+  sectionType,
   emptyText,
   tasks,
   dayDate,
@@ -362,6 +365,7 @@ function TaskSection({
           <TaskCard
             key={task.id}
             task={task}
+            sectionType={sectionType}
             dayDate={dayDate}
             isToday={isToday}
             onToggle={onToggle}
@@ -373,15 +377,22 @@ function TaskSection({
   );
 }
 
-function TaskCard({ task, dayDate, isToday, onToggle, onMissed }) {
+function TaskCard({ task, sectionType, dayDate, isToday, onToggle, onMissed }) {
   const navigate = useNavigate();
 
   const isCompleted = task.status === "COMPLETED";
   const isMissed = task.status === "MISSED";
   const isLocked = !isToday;
+  const taskSection = String(sectionType || task.section || "").toUpperCase();
+
+  // Task 1 fix:
+  // AI Revision Plan button must show ONLY inside the Revision Section,
+  // never inside Study Section. We use sectionType from TaskSection so it
+  // works even if backend sends section with extra spaces/case changes.
+  const showRevisionPlanButton = Boolean(task.topic_id) && taskSection === "REVISION";
 
   const openRevisionPlan = () => {
-    if (!task.topic_id) return;
+    if (!showRevisionPlanButton) return;
     navigate(`/revision-plan?topicId=${task.topic_id}`);
   };
 
@@ -450,7 +461,7 @@ function TaskCard({ task, dayDate, isToday, onToggle, onMissed }) {
         </button>
       )}
 
-      {task.topic_id && (
+      {showRevisionPlanButton && (
         <button
           className="revision-btn"
           onClick={openRevisionPlan}

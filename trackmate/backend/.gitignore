@@ -1,6 +1,7 @@
 .env
 backend/.env
+trackmate/backend/.env
 frontend/.env
-venv/
 node_modules/
+venv/
 __pycache__/

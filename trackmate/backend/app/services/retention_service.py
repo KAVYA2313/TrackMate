@@ -703,7 +703,6 @@ def refresh_retention_for_student(db: Session, student_id: int) -> Dict[str, Any
 
         if weak_chapter:
             create_or_update_weak_chapter_notification(db, record)
-
         refreshed.append(
             {
                 "chapter_id": record.chapter_id,
