@@ -3,12 +3,19 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_student
+
+from app.services.ai_schedule_service import (
+    generate_openai_week_schedule,
+    get_ai_schedule_dashboard,
+    get_whole_week_plan,
+    submit_today_schedule,
+)
+
 from app.services.schedule_service import (
-    get_schedule_dashboard,
-    generate_smart_schedule,
     toggle_schedule_task,
     mark_task_missed,
 )
+
 
 router = APIRouter(
     prefix="/schedule",
@@ -22,25 +29,44 @@ def schedule_dashboard(
     current_student=Depends(get_current_student),
 ):
     try:
-        return get_schedule_dashboard(db, current_student)
+        return get_ai_schedule_dashboard(db, current_student)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-smart")
-def generate_schedule(
+@router.post("/generate-ai-week")
+def generate_ai_week_schedule(
     db: Session = Depends(get_db),
     current_student=Depends(get_current_student),
 ):
     try:
-        result = generate_smart_schedule(db, current_student, days=7)
-        dashboard = get_schedule_dashboard(db, current_student)
+        return generate_openai_week_schedule(
+            db=db,
+            student=current_student,
+            reason="manual_generate_button",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-        return {
-            "message": result["message"],
-            "created_tasks": result["created_tasks"],
-            "dashboard": dashboard,
-        }
+
+@router.get("/whole-plan")
+def whole_plan(
+    db: Session = Depends(get_db),
+    current_student=Depends(get_current_student),
+):
+    try:
+        return get_whole_week_plan(db, current_student)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/submit-today")
+def submit_today(
+    db: Session = Depends(get_db),
+    current_student=Depends(get_current_student),
+):
+    try:
+        return submit_today_schedule(db, current_student)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -14,6 +14,9 @@ import TestPage from "./pages/TestPage";
 import ResultPage from "./pages/ResultPage";
 import SchedulePage from "./pages/SchedulePage";
 import HistoryPage from "./pages/HistoryPage";
+import WholePlanPage from "./pages/WholePlanPage";
+import RevisionPlanPage from "./pages/RevisionPlanPage";
+import CoachPage from "./pages/CoachPage";
 
 import "./style.css";
 
@@ -102,6 +105,31 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+  path="/schedule/whole-plan"
+  element={
+    <ProtectedRoute>
+      <WholePlanPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/revision-plan"
+  element={
+    <ProtectedRoute>
+      <RevisionPlanPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/coach"
+  element={
+    <ProtectedRoute>
+      <CoachPage />
+    </ProtectedRoute>
+  }
+/>
 
         <Route path="*" element={<RootRedirect />} />
       </Routes>

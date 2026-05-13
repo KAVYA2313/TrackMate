@@ -11,8 +11,12 @@ from app.routers import (
     subject_router,
     test_router,
     notification_router,
-    history_router
+    history_router,
+    revision_router,
+    coach_router
+
 )
+
 
 from app.services.background_scheduler import start_scheduler, stop_scheduler
 
@@ -41,6 +45,8 @@ app.include_router(retention_router.router)
 app.include_router(schedule_router.router)
 app.include_router(notification_router.router)
 app.include_router(history_router.router)
+app.include_router(revision_router.router)
+app.include_router(coach_router.router)
 
 
 @app.get("/")
@@ -64,3 +70,4 @@ def startup_event():
 @app.on_event("shutdown")
 def shutdown_event():
     stop_scheduler()
+# python -m uvicorn app.main:app --reload

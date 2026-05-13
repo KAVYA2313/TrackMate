@@ -17,6 +17,10 @@ MAX_STABILITY = 30.0
 BASE_RETENTION_FOR_LOW_CONFIDENCE_TEST = 50.0
 
 
+# -------------------------------------------------------------------
+# Basic helpers
+# -------------------------------------------------------------------
+
 def safe_float(value: Any, default: float = 0.0) -> float:
     try:
         if value is None:
@@ -76,6 +80,10 @@ def get_days_passed(last_activity_at) -> float:
     return round(max(0.0, diff.total_seconds() / 86400), 2)
 
 
+# -------------------------------------------------------------------
+# Confidence logic
+# -------------------------------------------------------------------
+
 def calculate_test_confidence(question_count: int) -> float:
     """
     More questions = more confidence in score.
@@ -98,6 +106,78 @@ def calculate_test_confidence(question_count: int) -> float:
         return 0.80
 
     return 1.00
+
+
+# -------------------------------------------------------------------
+# NEW: Difficulty-aware retention logic
+# -------------------------------------------------------------------
+
+def calculate_difficulty_adjusted_score(
+    raw_score: float,
+    difficulty: str,
+) -> Dict[str, float]:
+    """
+    Converts raw test score into a difficulty-aware score used for retention.
+
+    Why:
+    - 2/5 Easy and 2/5 Hard are both 40% raw score.
+    - But Hard questions prove more ability than Easy questions.
+    - So Hard gets a small retention credit.
+    - Easy gets a small retention penalty because basics should be easier.
+
+    Important:
+    - raw_score is still stored as last_score.
+    - adjusted_score is used only for retention calculation.
+    - Priority still becomes higher if the student is weak in hard questions.
+
+    Example with 5 questions:
+    - Easy  2/5 = raw 40 -> adjusted 36 -> retention around 38.8
+    - Hard  2/5 = raw 40 -> adjusted 44 -> retention around 45.2
+    - Easy  5/5 = raw 100 -> adjusted 96 -> retention around 86.8 for 5 questions
+    - Hard  5/5 = raw 100 -> adjusted 100 -> retention around 90 for 5 questions
+    """
+    difficulty = normalize_difficulty(difficulty)
+    raw_score = clamp(raw_score, 0.0, 100.0)
+
+    adjustment = 0.0
+
+    if difficulty == "Hard":
+        if raw_score >= 90:
+            adjustment = 8.0
+        elif raw_score >= 70:
+            adjustment = 6.0
+        elif raw_score >= 40:
+            adjustment = 4.0
+        else:
+            adjustment = 2.0
+
+    elif difficulty == "Medium":
+        if raw_score >= 90:
+            adjustment = 3.0
+        elif raw_score >= 70:
+            adjustment = 2.0
+        elif raw_score >= 40:
+            adjustment = 0.0
+        else:
+            adjustment = -1.0
+
+    else:  # Easy
+        if raw_score >= 90:
+            adjustment = -4.0
+        elif raw_score >= 70:
+            adjustment = -6.0
+        elif raw_score >= 40:
+            adjustment = -4.0
+        else:
+            adjustment = -5.0
+
+    adjusted_score = clamp(raw_score + adjustment, 0.0, 100.0)
+
+    return {
+        "raw_score": round(raw_score, 2),
+        "adjusted_score": round(adjusted_score, 2),
+        "difficulty_adjustment": round(adjustment, 2),
+    }
 
 
 def calculate_decayed_retention(
@@ -129,36 +209,48 @@ def calculate_retention_after_test(
     days_passed: float,
     latest_score: float,
     question_count: int,
+    difficulty: str = "Medium",
 ) -> Dict[str, float]:
     """
-    Product-level retention update.
+    Difficulty-aware retention update.
 
     First test:
-        If enough questions, retention = score.
-        If very few questions, score is adjusted using confidence.
+        adjusted_score = raw score + difficulty effect
+        retention = adjusted_score if confidence is 1.0
+        otherwise retention = 50 baseline blended with adjusted_score
 
     Repeated test:
-        First decay old retention.
-        Then combine decayed retention with latest score.
+        old retention decays first
+        adjusted latest score is blended with decayed retention
 
-    latest test has more importance because it shows current reality.
+    latest_score is raw percentage.
+    difficulty_adjusted_score is used for retention only.
     """
     latest_score = clamp(latest_score, 0.0, 100.0)
     confidence = calculate_test_confidence(question_count)
 
+    adjusted_info = calculate_difficulty_adjusted_score(
+        raw_score=latest_score,
+        difficulty=difficulty,
+    )
+
+    adjusted_score = adjusted_info["adjusted_score"]
+
     if is_first_test:
         if confidence >= 1.0:
-            retention = latest_score
+            retention = adjusted_score
         else:
             retention = (
                 BASE_RETENTION_FOR_LOW_CONFIDENCE_TEST * (1 - confidence)
-                + latest_score * confidence
+                + adjusted_score * confidence
             )
 
         return {
             "retention": round(clamp(retention, 0.0, 100.0), 2),
             "decayed_retention": 0.0,
             "test_confidence": confidence,
+            "difficulty_adjusted_score": adjusted_score,
+            "difficulty_adjustment": adjusted_info["difficulty_adjustment"],
         }
 
     decayed_retention = calculate_decayed_retention(
@@ -170,14 +262,20 @@ def calculate_retention_after_test(
     latest_weight = 0.65 * confidence
     old_weight = 1 - latest_weight
 
-    retention = (decayed_retention * old_weight) + (latest_score * latest_weight)
+    retention = (decayed_retention * old_weight) + (adjusted_score * latest_weight)
 
     return {
         "retention": round(clamp(retention, 0.0, 100.0), 2),
         "decayed_retention": decayed_retention,
         "test_confidence": confidence,
+        "difficulty_adjusted_score": adjusted_score,
+        "difficulty_adjustment": adjusted_info["difficulty_adjustment"],
     }
 
+
+# -------------------------------------------------------------------
+# Stability logic
+# -------------------------------------------------------------------
 
 def get_score_gain(score_percentage: float) -> float:
     """
@@ -203,7 +301,7 @@ def get_score_gain(score_percentage: float) -> float:
 def get_difficulty_mastery_bonus(difficulty: str, score_percentage: float) -> float:
     """
     Difficulty bonus is given only when student performs well.
-    If student scores low in hard test, do not reward difficulty.
+    If student scores low in hard test, do not reward stability too much.
     """
     difficulty = normalize_difficulty(difficulty)
 
@@ -211,11 +309,16 @@ def get_difficulty_mastery_bonus(difficulty: str, score_percentage: float) -> fl
         return 0.0
 
     if difficulty == "Hard":
-        return 1.2
+        if score_percentage >= 90:
+            return 2.0
+        return 1.4
 
     if difficulty == "Medium":
-        return 0.6
+        if score_percentage >= 90:
+            return 1.0
+        return 0.7
 
+    # Easy score gives normal confidence, not extra mastery.
     return 0.0
 
 
@@ -249,9 +352,13 @@ def calculate_stability(
     return round(clamp(new_stability, MIN_STABILITY, MAX_STABILITY), 2)
 
 
+# -------------------------------------------------------------------
+# Weak chapter + priority logic
+# -------------------------------------------------------------------
+
 def is_weak_chapter(retention: float, last_score: float) -> bool:
     """
-    Chapter is weak if memory is low OR latest test score is low.
+    Chapter is weak if memory is low OR latest raw test score is low.
     """
     return retention < WEAK_RETENTION_LIMIT or last_score < 40
 
@@ -268,8 +375,11 @@ def get_score_penalty(last_score: float) -> float:
 
 def get_difficulty_penalty(difficulty: str, last_score: float, retention: float) -> float:
     """
-    Hard/Medium difficulty increases priority only when chapter is not strong.
-    If student already has high score and high retention, no difficulty penalty.
+    Difficulty impact on priority score.
+
+    Hard low/average score = higher priority.
+    Easy low score also gets priority because basics are weak.
+    Strong chapter gets no difficulty penalty.
     """
     difficulty = normalize_difficulty(difficulty)
 
@@ -277,26 +387,50 @@ def get_difficulty_penalty(difficulty: str, last_score: float, retention: float)
         return 0.0
 
     if difficulty == "Hard":
-        return 10.0
+        if last_score < 40:
+            return 18.0
+        if last_score < 70:
+            return 14.0
+        return 8.0
 
     if difficulty == "Medium":
+        if last_score < 40:
+            return 12.0
+        if last_score < 70:
+            return 8.0
         return 5.0
 
+    # Easy: low score in basics is serious, but average score is medium priority.
+    if last_score < 40:
+        return 15.0
+    if last_score < 70:
+        return 6.0
     return 0.0
 
 
-def get_recommended_action(retention: float, last_score: float) -> str:
+def get_recommended_action(retention: float, last_score: float, difficulty: str = "Medium") -> str:
+    difficulty = normalize_difficulty(difficulty)
+
     if last_score < 40:
-        return "Relearn chapter basics and retake test"
+        if difficulty == "Hard":
+            return "Revise concepts, solve medium questions, then retake hard test"
+        if difficulty == "Easy":
+            return "Relearn chapter basics first, then retake easy test"
+        return "Relearn important concepts and retake test"
 
     if retention < 40:
         return "Revise chapter because memory is dropping"
 
     if last_score < 70:
+        if difficulty == "Hard":
+            return "Practice hard questions again because difficulty priority is high"
         return "Practice more questions and do quick revision"
 
     if retention < 70:
         return "Light revision recommended"
+
+    if difficulty == "Hard" and last_score >= 90:
+        return "Excellent hard-level mastery, keep this chapter for later revision"
 
     return "Chapter is strong, keep for later revision"
 
@@ -353,6 +487,10 @@ def calculate_priority_score(
     return round(clamp(priority_score, 0.0, 150.0), 2)
 
 
+# -------------------------------------------------------------------
+# Main update after test submit
+# -------------------------------------------------------------------
+
 def update_retention_after_chapter_test(
     db: Session,
     student_id: int,
@@ -408,6 +546,7 @@ def update_retention_after_chapter_test(
         days_passed=days_passed,
         latest_score=score_percentage,
         question_count=question_count,
+        difficulty=difficulty,
     )
 
     retention = retention_info["retention"]
@@ -471,19 +610,30 @@ def update_retention_after_chapter_test(
         "chapter_name": chapter_name,
         "difficulty": difficulty,
         "score_percentage": score_percentage,
+        "difficulty_adjusted_score": retention_info["difficulty_adjusted_score"],
+        "difficulty_adjustment": retention_info["difficulty_adjustment"],
         "stability": stability,
         "revision_count": revision_count,
         "last_score": score_percentage,
         "retention": retention,
         "weak_chapter": weak_chapter,
         "priority_score": priority_score,
-        "recommended_action": get_recommended_action(retention, score_percentage),
+        "recommended_action": get_recommended_action(retention, score_percentage, difficulty),
         "days_passed": days_passed,
         "decayed_retention": retention_info["decayed_retention"],
         "test_confidence": retention_info["test_confidence"],
         "last_activity_at": now.isoformat(),
-        "logic_used": "first_test_score_based" if is_first_test else "decay_plus_latest_score",
+        "logic_used": (
+            "difficulty_aware_first_test"
+            if is_first_test
+            else "difficulty_aware_decay_plus_latest_score"
+        ),
     }
+
+
+# -------------------------------------------------------------------
+# Daily/lazy refresh logic
+# -------------------------------------------------------------------
 
 def refresh_retention_for_student(db: Session, student_id: int) -> Dict[str, Any]:
     """
@@ -565,6 +715,7 @@ def refresh_retention_for_student(db: Session, student_id: int) -> Dict[str, Any
                 "recommended_action": get_recommended_action(
                     record.retention,
                     safe_float(record.last_score),
+                    record.difficulty,
                 ),
             }
         )

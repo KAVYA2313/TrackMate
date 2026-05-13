@@ -1,7 +1,58 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import API from "../api/api";
 
 export default function Dashboard() {
   const student = getStudent();
+
+  const [weakAlerts, setWeakAlerts] = useState([]);
+  const [alertLoading, setAlertLoading] = useState(true);
+
+  useEffect(() => {
+    fetchWeakAlerts();
+  }, []);
+
+  const fetchWeakAlerts = async () => {
+    try {
+      setAlertLoading(true);
+
+      const res = await API.get("/notifications/me");
+
+      const rawData = res.data;
+
+      let list = [];
+
+      if (Array.isArray(rawData)) {
+        list = rawData;
+      } else if (Array.isArray(rawData?.notifications)) {
+        list = rawData.notifications;
+      } else if (Array.isArray(rawData?.items)) {
+        list = rawData.items;
+      } else if (Array.isArray(rawData?.data)) {
+        list = rawData.data;
+      }
+
+      const filtered = list
+        .filter((item) => {
+          const type = String(item.notification_type || item.type || "").toUpperCase();
+          return (
+            type.includes("WEAK") ||
+            item.priority_score !== undefined ||
+            item.retention !== undefined ||
+            item.title ||
+            item.message
+          );
+        })
+        .slice(0, 4);
+
+      setWeakAlerts(filtered);
+    } catch (err) {
+      console.error("Failed to load weak topic alerts:", err);
+      setWeakAlerts([]);
+    } finally {
+      setAlertLoading(false);
+    }
+  };
 
   return (
     <main className="tm-dashboard-page">
@@ -34,14 +85,13 @@ export default function Dashboard() {
         </div>
 
         <div className="tm-dashboard-hero-card">
-          <div className="tm-dashboard-hero-glow"></div>
-
           <span>Today Focus</span>
+
           <h2>Chapter Priority Engine</h2>
 
           <p>
-            Low marks become revision tasks. Strong chapters unlock the next
-            topic. Missed topics are shifted forward automatically.
+            Low score chapters become revision tasks. Strong chapters unlock
+            the next topic. Missed topics are shifted forward automatically.
           </p>
 
           <div className="tm-dashboard-hero-mini-grid">
@@ -79,6 +129,45 @@ export default function Dashboard() {
         </div>
       </section>
 
+      <section className="tm-dashboard-weak-alerts">
+        <div className="weak-alerts-head">
+          <div>
+            <span>AI Weak Topic Alerts</span>
+            <h2>What needs attention now?</h2>
+            <p>
+              TrackMate checks your test performance and shows important
+              revision alerts directly here.
+            </p>
+          </div>
+
+          <Link to="/schedule">Open Smart Schedule</Link>
+        </div>
+
+        {alertLoading ? (
+          <div className="weak-alert-loader">
+            Loading AI alerts...
+          </div>
+        ) : weakAlerts.length === 0 ? (
+          <div className="weak-alert-empty">
+            <div>
+              <h3>No weak topic alert right now</h3>
+              <p>
+                Give a chapter test. If any chapter needs revision, TrackMate
+                will show the alert here.
+              </p>
+            </div>
+
+            <Link to="/generate-test">Start Test</Link>
+          </div>
+        ) : (
+          <div className="weak-alert-grid">
+            {weakAlerts.map((alert, index) => (
+              <WeakAlertCard key={alert.id || index} alert={alert} />
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="tm-dashboard-stat-grid">
         <InfoCard
           label="Subject"
@@ -89,22 +178,22 @@ export default function Dashboard() {
 
         <InfoCard
           label="Question Bank"
-          value="150"
-          note="Easy, Medium and Hard"
+          value="600"
+          note="Topic-wise Easy, Medium and Hard"
           icon="Q"
         />
 
         <InfoCard
           label="Flow"
-          value="Test → Score"
-          note="Progress and schedule update"
+          value="Test → AI"
+          note="Wrong answers become topic revision"
           icon="F"
         />
 
         <InfoCard
           label="Smart Plan"
-          value="3 Days"
-          note="Yesterday, today and tomorrow"
+          value="7 Days"
+          note="OpenAI weekly schedule"
           icon="S"
         />
       </section>
@@ -120,8 +209,8 @@ export default function Dashboard() {
 
         <FlowCard
           number="02"
-          title="Retention Update"
-          text="After submission, chapter score, retention, weak status and priority score are updated."
+          title="AI Weak Topic Detection"
+          text="After submission, OpenAI checks wrong answers and finds the exact weak topic."
           link="/history"
           linkText="View history"
         />
@@ -129,7 +218,7 @@ export default function Dashboard() {
         <FlowCard
           number="03"
           title="Smart Schedule"
-          text="Weak chapters are added back as revision and retest tasks in the daily schedule."
+          text="Weak topics are added into revision and retest tasks in the daily schedule."
           link="/schedule"
           linkText="Open schedule"
         />
@@ -156,8 +245,8 @@ export default function Dashboard() {
             />
 
             <StepItem
-              title="Update memory"
-              text="Retention and priority score are updated using forgetting curve logic."
+              title="AI finds weak topic"
+              text="OpenAI checks wrong answers and detects exact topic weakness."
             />
 
             <StepItem
@@ -170,14 +259,14 @@ export default function Dashboard() {
         <div className="tm-dashboard-ai-panel">
           <span>Smart Suggestion</span>
 
-          <h2>Focus on weak chapters first.</h2>
+          <h2>Focus on weak topics first.</h2>
 
           <p>
-            TrackMate checks your test score and retention. If your marks are
-            low, revision is added automatically before new topics.
+            TrackMate checks your test score and weak topics. If your result
+            needs improvement, revision is added before new topics.
           </p>
 
-          <Link to="/schedule">Open Smart Schedule</Link>
+          <Link to="/coach">Ask AI Coach</Link>
         </div>
       </section>
     </main>
@@ -191,6 +280,50 @@ function getStudent() {
   } catch {
     return null;
   }
+}
+
+function WeakAlertCard({ alert }) {
+  const title =
+    alert.title ||
+    alert.chapter_name ||
+    alert.topic_name ||
+    "Revision needed";
+
+  const message =
+    alert.message ||
+    alert.ai_message ||
+    "This topic needs a short revision session today.";
+
+  const retention = alert.retention;
+  const priority = alert.priority_score;
+
+  return (
+    <div className="weak-alert-card">
+      <div className="weak-alert-top">
+        <span>AI Alert</span>
+        <b>{alert.is_read ? "Seen" : "New"}</b>
+      </div>
+
+      <h3>{title}</h3>
+
+      <p>{message}</p>
+
+      <div className="weak-alert-meta">
+        {retention !== undefined && retention !== null && (
+          <span>Memory: {retention}%</span>
+        )}
+
+        {priority !== undefined && priority !== null && (
+          <span>Priority: {priority}</span>
+        )}
+      </div>
+
+      <div className="weak-alert-actions">
+        <Link to="/schedule">Review Schedule</Link>
+        <Link to="/coach">Ask AI Coach</Link>
+      </div>
+    </div>
+  );
 }
 
 function InfoCard({ label, value, note, icon }) {

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import NotificationBell from "./NotificationBell";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -70,7 +69,9 @@ export default function Navbar() {
                 Schedule
               </NavLink>
 
-              <NotificationBell studentId={student?.id} />
+              <NavLink to="/coach" className={navClass}>
+                AI Coach
+              </NavLink>
 
               <span className="tm-user-pill">
                 <span className="tm-user-dot"></span>
