@@ -17,7 +17,6 @@ export default function Dashboard() {
       setAlertLoading(true);
 
       const res = await API.get("/notifications/me");
-
       const rawData = res.data;
 
       let list = [];
@@ -35,6 +34,7 @@ export default function Dashboard() {
       const filtered = list
         .filter((item) => {
           const type = String(item.notification_type || item.type || "").toUpperCase();
+
           return (
             type.includes("WEAK") ||
             item.priority_score !== undefined ||
@@ -43,7 +43,7 @@ export default function Dashboard() {
             item.message
           );
         })
-        .slice(0, 4);
+        .slice(0, 6);
 
       setWeakAlerts(filtered);
     } catch (err) {
@@ -55,221 +55,238 @@ export default function Dashboard() {
   };
 
   return (
-    <main className="tm-dashboard-page">
-      <section className="tm-dashboard-hero">
-        <div className="tm-dashboard-hero-left">
-          <span className="tm-dashboard-kicker">TrackMate MVP</span>
+    <main className="tm-dashboard-page tm-dashboard-page-right-layout">
+      <div className="tm-dashboard-shell">
+        <section className="tm-dashboard-layout">
+          <div className="tm-dashboard-main-column">
+            <section className="tm-dashboard-hero tm-dashboard-hero-clean">
+              <div className="tm-dashboard-hero-left">
+                <span className="tm-dashboard-kicker">TrackMate MVP</span>
 
-          <h1>
-            Study smarter with tests, retention and weekly planning.
-          </h1>
+                <h1>
+                  Study smarter with tests, retention and weekly planning.
+                </h1>
 
-          <p>
-            Generate chapter-wise tests, track your score, detect weak chapters,
-            and follow a smart schedule based on your learning progress.
-          </p>
+                <p>
+                  Generate chapter-wise tests, track your score, detect weak topics,
+                  and follow a smart schedule based on your learning progress.
+                </p>
 
-          <div className="tm-dashboard-actions">
-            <Link to="/generate-test" className="tm-dashboard-primary-btn">
-              Generate Test
-            </Link>
+                <div className="tm-dashboard-actions">
+                  <Link to="/generate-test" className="tm-dashboard-primary-btn">
+                    Generate Test
+                  </Link>
 
-            <Link to="/schedule" className="tm-dashboard-secondary-btn">
-              View Schedule
-            </Link>
+                  <Link to="/schedule" className="tm-dashboard-secondary-btn">
+                    View Schedule
+                  </Link>
 
-            <Link to="/history" className="tm-dashboard-ghost-btn">
-              View History
-            </Link>
+                  <Link to="/history" className="tm-dashboard-ghost-btn">
+                    View History
+                  </Link>
+                </div>
+              </div>
+
+              <div className="tm-dashboard-hero-card">
+                <span>Today Focus</span>
+
+                <h2>Chapter Priority Engine</h2>
+
+                <p>
+                  Chapters needing practice become revision tasks. Strong chapters
+                  unlock the next topic. Missed tasks shift forward automatically.
+                </p>
+
+                <div className="tm-dashboard-hero-mini-grid">
+                  <div>
+                    <strong>70%</strong>
+                    <small>Study</small>
+                  </div>
+
+                  <div>
+                    <strong>30%</strong>
+                    <small>Revision</small>
+                  </div>
+
+                  <div>
+                    <strong>AI</strong>
+                    <small>Suggestion</small>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="tm-dashboard-welcome tm-dashboard-welcome-clean">
+              <div>
+                <span>Welcome back</span>
+                <h2>{student?.name || "Student"}</h2>
+                <p>
+                  Your dashboard shows the complete TrackMate flow from test to
+                  weak topic detection to smart schedule.
+                </p>
+              </div>
+
+              <div className="tm-dashboard-status-pill">
+                <i></i>
+                System Active
+              </div>
+            </section>
+
+            <section className="tm-dashboard-stat-grid tm-dashboard-stat-grid-clean">
+              <InfoCard
+                label="Subject"
+                value="Maths"
+                note="10 chapters seeded"
+                icon="M"
+              />
+
+              <InfoCard
+                label="Question Bank"
+                value="600"
+                note="Topic-wise Easy, Medium and Hard"
+                icon="Q"
+              />
+
+              <InfoCard
+                label="Flow"
+                value="Test → AI"
+                note="Wrong answers become topic revision"
+                icon="F"
+              />
+
+              <InfoCard
+                label="Smart Plan"
+                value="7 Days"
+                note="OpenAI weekly schedule"
+                icon="S"
+              />
+            </section>
+
+            <section className="tm-dashboard-flow-grid tm-dashboard-flow-grid-clean">
+              <FlowCard
+                number="01"
+                title="Generate Test"
+                text="Select one or more chapters and create a random MCQ test based on difficulty."
+                link="/generate-test"
+                linkText="Start test"
+              />
+
+              <FlowCard
+                number="02"
+                title="AI Weak Topic Detection"
+                text="After submission, OpenAI checks wrong answers and finds the exact weak topic."
+                link="/history"
+                linkText="View history"
+              />
+
+              <FlowCard
+                number="03"
+                title="Smart Schedule"
+                text="Weak topics are added into revision and retest tasks in the daily schedule."
+                link="/schedule"
+                linkText="Open schedule"
+              />
+            </section>
+
+            <section className="tm-dashboard-bottom-grid tm-dashboard-bottom-grid-clean">
+              <div className="tm-dashboard-panel">
+                <div className="tm-dashboard-panel-head">
+                  <div>
+                    <span>How TrackMate works</span>
+                    <h2>Simple student flow</h2>
+                  </div>
+                </div>
+
+                <div className="tm-dashboard-steps">
+                  <StepItem
+                    title="Give chapter test"
+                    text="Student selects chapter and difficulty level."
+                  />
+
+                  <StepItem
+                    title="Get score analysis"
+                    text="System calculates marks, percentage and chapter-wise result."
+                  />
+
+                  <StepItem
+                    title="AI finds weak topic"
+                    text="OpenAI checks wrong answers and detects exact topic weakness."
+                  />
+
+                  <StepItem
+                    title="Follow smart plan"
+                    text="Schedule engine decides what to study or revise next."
+                  />
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
 
-        <div className="tm-dashboard-hero-card">
-          <span>Today Focus</span>
+          <aside className="tm-dashboard-right-column">
+            <WeakTopicPanel
+              weakAlerts={weakAlerts}
+              alertLoading={alertLoading}
+            />
 
-          <h2>Chapter Priority Engine</h2>
+            <div className="tm-dashboard-ai-panel tm-dashboard-ai-panel-right">
+              <span>Smart Suggestion</span>
 
-          <p>
-            Low score chapters become revision tasks. Strong chapters unlock
-            the next topic. Missed topics are shifted forward automatically.
-          </p>
+              <h2>Focus on weak topics first.</h2>
 
-          <div className="tm-dashboard-hero-mini-grid">
-            <div>
-              <strong>70%</strong>
-              <small>Study</small>
+              <p>
+                TrackMate checks your test result and weak topics. If any topic
+                needs practice, revision is added before new study.
+              </p>
+
+              <Link to="/coach">Ask AI Coach</Link>
             </div>
+          </aside>
+        </section>
+      </div>
+    </main>
+  );
+}
 
-            <div>
-              <strong>30%</strong>
-              <small>Revision</small>
-            </div>
-
-            <div>
-              <strong>AI</strong>
-              <small>Suggestion</small>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="tm-dashboard-welcome">
+function WeakTopicPanel({ weakAlerts, alertLoading }) {
+  return (
+    <section className="tm-dashboard-weak-alerts tm-dashboard-weak-alerts-right">
+      <div className="weak-alerts-head">
         <div>
-          <span>Welcome back</span>
-          <h2>{student?.name || "Student"}</h2>
+          <span>AI Weak Topic Alerts</span>
+          <h2>What needs attention now?</h2>
           <p>
-            Your dashboard shows the complete TrackMate flow from test to
-            retention to schedule.
+            TrackMate checks your test performance and shows important revision
+            alerts directly here.
           </p>
         </div>
 
-        <div className="tm-dashboard-status-pill">
-          <i></i>
-          System Active
-        </div>
-      </section>
+        <Link to="/schedule">Open Smart Schedule</Link>
+      </div>
 
-      <section className="tm-dashboard-weak-alerts">
-        <div className="weak-alerts-head">
+      {alertLoading ? (
+        <div className="weak-alert-loader">
+          Loading AI alerts...
+        </div>
+      ) : weakAlerts.length === 0 ? (
+        <div className="weak-alert-empty weak-alert-empty-right">
           <div>
-            <span>AI Weak Topic Alerts</span>
-            <h2>What needs attention now?</h2>
+            <h3>No weak topic alert right now</h3>
             <p>
-              TrackMate checks your test performance and shows important
-              revision alerts directly here.
+              Give a chapter test. If any topic needs revision, TrackMate will
+              show the alert here.
             </p>
           </div>
 
-          <Link to="/schedule">Open Smart Schedule</Link>
+          <Link to="/generate-test">Start Test</Link>
         </div>
-
-        {alertLoading ? (
-          <div className="weak-alert-loader">
-            Loading AI alerts...
-          </div>
-        ) : weakAlerts.length === 0 ? (
-          <div className="weak-alert-empty">
-            <div>
-              <h3>No weak topic alert right now</h3>
-              <p>
-                Give a chapter test. If any chapter needs revision, TrackMate
-                will show the alert here.
-              </p>
-            </div>
-
-            <Link to="/generate-test">Start Test</Link>
-          </div>
-        ) : (
-          <div className="weak-alert-grid">
-            {weakAlerts.map((alert, index) => (
-              <WeakAlertCard key={alert.id || index} alert={alert} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="tm-dashboard-stat-grid">
-        <InfoCard
-          label="Subject"
-          value="Maths"
-          note="10 chapters seeded"
-          icon="M"
-        />
-
-        <InfoCard
-          label="Question Bank"
-          value="600"
-          note="Topic-wise Easy, Medium and Hard"
-          icon="Q"
-        />
-
-        <InfoCard
-          label="Flow"
-          value="Test → AI"
-          note="Wrong answers become topic revision"
-          icon="F"
-        />
-
-        <InfoCard
-          label="Smart Plan"
-          value="7 Days"
-          note="OpenAI weekly schedule"
-          icon="S"
-        />
-      </section>
-
-      <section className="tm-dashboard-flow-grid">
-        <FlowCard
-          number="01"
-          title="Generate Test"
-          text="Select one or more chapters and create a random MCQ test based on difficulty."
-          link="/generate-test"
-          linkText="Start test"
-        />
-
-        <FlowCard
-          number="02"
-          title="AI Weak Topic Detection"
-          text="After submission, OpenAI checks wrong answers and finds the exact weak topic."
-          link="/history"
-          linkText="View history"
-        />
-
-        <FlowCard
-          number="03"
-          title="Smart Schedule"
-          text="Weak topics are added into revision and retest tasks in the daily schedule."
-          link="/schedule"
-          linkText="Open schedule"
-        />
-      </section>
-
-      <section className="tm-dashboard-bottom-grid">
-        <div className="tm-dashboard-panel">
-          <div className="tm-dashboard-panel-head">
-            <div>
-              <span>How TrackMate works</span>
-              <h2>Simple student flow</h2>
-            </div>
-          </div>
-
-          <div className="tm-dashboard-steps">
-            <StepItem
-              title="Give chapter test"
-              text="Student selects chapter and difficulty level."
-            />
-
-            <StepItem
-              title="Get score analysis"
-              text="System calculates marks, percentage and chapter-wise result."
-            />
-
-            <StepItem
-              title="AI finds weak topic"
-              text="OpenAI checks wrong answers and detects exact topic weakness."
-            />
-
-            <StepItem
-              title="Follow smart plan"
-              text="Schedule engine decides what to study or revise next."
-            />
-          </div>
+      ) : (
+        <div className="weak-alert-grid weak-alert-grid-right">
+          {weakAlerts.map((alert, index) => (
+            <WeakAlertCard key={alert.id || index} alert={alert} />
+          ))}
         </div>
-
-        <div className="tm-dashboard-ai-panel">
-          <span>Smart Suggestion</span>
-
-          <h2>Focus on weak topics first.</h2>
-
-          <p>
-            TrackMate checks your test score and weak topics. If your result
-            needs improvement, revision is added before new topics.
-          </p>
-
-          <Link to="/coach">Ask AI Coach</Link>
-        </div>
-      </section>
-    </main>
+      )}
+    </section>
   );
 }
 
@@ -298,7 +315,7 @@ function WeakAlertCard({ alert }) {
   const priority = alert.priority_score;
 
   return (
-    <div className="weak-alert-card">
+    <div className="weak-alert-card weak-alert-card-right">
       <div className="weak-alert-top">
         <span>AI Alert</span>
         <b>{alert.is_read ? "Seen" : "New"}</b>

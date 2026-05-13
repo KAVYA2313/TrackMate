@@ -126,6 +126,7 @@ export default function SchedulePage() {
   const budget = dashboard?.budget || {};
   const recommendation = dashboard?.ai_recommendation || {};
   const days = dashboard?.days || [];
+  const examCountdown = dashboard?.exam_countdown || {};
 
   return (
     <div className="smart-schedule-page">
@@ -165,30 +166,36 @@ export default function SchedulePage() {
       )}
 
       <div className="schedule-stat-grid">
-        <StatCard
-          label="Overall Retention"
-          value={`${stats.overall_retention || 0}%`}
-          note="Average memory level"
-        />
+  <StatCard
+    label="Overall Retention"
+    value={`${stats.overall_retention || 0}%`}
+    note="Average memory level"
+  />
 
-        <StatCard
-          label="Weak Topics"
-          value={stats.weak_topics || 0}
-          note="Need revision first"
-        />
+  <StatCard
+    label="Weak Topics"
+    value={stats.weak_topics || 0}
+    note="Need revision first"
+  />
 
-        <StatCard
-          label="Upcoming Reviews"
-          value={stats.upcoming_reviews || 0}
-          note="Due today/tomorrow"
-        />
+  <StatCard
+    label="Upcoming Reviews"
+    value={stats.upcoming_reviews || 0}
+    note="Due today/tomorrow"
+  />
 
-        <StatCard
-          label="Today Study Time"
-          value={`${budget.total_minutes || 0} min`}
-          note={`Study ${budget.study_minutes || 0} min • Revision ${budget.revision_minutes || 0} min`}
-        />
-      </div>
+  <StatCard
+    label="Today Study Time"
+    value={`${budget.total_minutes || 0} min`}
+    note={`Study ${budget.study_minutes || 0} min • Revision ${budget.revision_minutes || 0} min`}
+  />
+
+  <StatCard
+    label="Exam Days Left"
+    value={`${examCountdown.exam_day_left ?? 0} days`}
+    note="Countdown updates daily"
+  />
+</div>
 
       <div className="schedule-main-grid">
         <div className="schedule-left">
